@@ -36,7 +36,7 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Konuşma tanıma ve sentez bileşenlerini başlatır - Geliştirilmiş versiyon
+        /// Konuşma tanıma ve sentez bileşenlerini başlatır - Mikrofon sorunu çözümü
         /// </summary>
         private void InitializeSpeechComponents()
         {
@@ -46,42 +46,12 @@ namespace SpeechToTextTranslator
                 speechSynthesizer = new SpeechSynthesizer();
                 speechSynthesizer.SetOutputToDefaultAudioDevice();
                 
-                // Sistemdeki mevcut recognizer'ları kontrol et
-                var recognizers = SpeechRecognitionEngine.InstalledRecognizers();
-                if (recognizers.Count == 0)
-                {
-                    lblStatus.Text = "❌ Mikrofon servisi bulunamadı - Manuel giriş kullanın";
-                    lblStatus.ForeColor = Color.Orange;
-                    return;
-                }
-
-                // İlk mevcut recognizer'ı kullan
-                speechRecognizer = new SpeechRecognitionEngine(recognizers[0]);
-                
-                // Daha kapsamlı dil tanıma grameri oluştur
-                var grammarBuilder = new GrammarBuilder();
-                
-                // Türkçe ve İngilizce kelimeler için özel gramer
-                var turkishWords = new Choices("merhaba", "selam", "nasılsın", "iyiyim", "teşekkürler", "lütfen", "evet", "hayır", "güzel", "iyi", "kötü", "büyük", "küçük", "hızlı", "yavaş", "sıcak", "soğuk", "su", "yemek", "ev", "araba", "kitap", "okul", "çalışma", "aile", "arkadaş", "zaman", "para", "ülke", "şehir", "proje", "çok", "beautiful", "hello", "hi", "how", "are", "you", "fine", "thank", "please", "yes", "no", "good", "bad", "big", "small", "fast", "slow", "hot", "cold", "water", "food", "house", "car", "book", "school", "work", "family", "friend", "time", "money", "country", "city", "very", "project");
-                
-                grammarBuilder.Append(turkishWords);
-                grammarBuilder.AppendWildcard(); // Diğer kelimeler için
-                
-                // Grameri yükle
-                speechRecognizer.LoadGrammar(new Grammar(grammarBuilder));
-
-                // Konuşma tanıma olaylarını bağla
-                speechRecognizer.SpeechRecognized += SpeechRecognizer_SpeechRecognized;
-                speechRecognizer.SpeechDetected += SpeechRecognizer_SpeechDetected;
-                speechRecognizer.SpeechHypothesized += SpeechRecognizer_SpeechHypothesized;
-                speechRecognizer.SpeechRecognitionRejected += SpeechRecognizer_SpeechRecognitionRejected;
-
-                lblStatus.Text = "✅ Mikrofon hazır - KONUŞMAYA BAŞLA butonuna basın";
-                lblStatus.ForeColor = Color.Lime;
+                // Mikrofon servisini başlat - Geliştirilmiş versiyon
+                InitializeMicrophoneService();
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "❌ Mikrofon servisi yok - Manuel giriş kullanın";
+                lblStatus.Text = "❌ Ses servisi yok - Manuel giriş kullanın";
                 lblStatus.ForeColor = Color.Orange;
                 
                 // Konuşma sentez motorunu başlat (bu genelde çalışır)
@@ -94,6 +64,90 @@ namespace SpeechToTextTranslator
                 {
                     // Seslendirme de çalışmazsa sessizce devam et
                 }
+            }
+        }
+
+        /// <summary>
+        /// Mikrofon servisini başlatır - Çoklu deneme yöntemi
+        /// </summary>
+        private void InitializeMicrophoneService()
+        {
+            try
+            {
+                // Yöntem 1: Varsayılan recognizer ile dene
+                speechRecognizer = new SpeechRecognitionEngine();
+                ConfigureSpeechRecognizer();
+                lblStatus.Text = "✅ Mikrofon hazır - KONUŞMAYA BAŞLA butonuna basın";
+                lblStatus.ForeColor = Color.Lime;
+                return;
+            }
+            catch
+            {
+                // Yöntem 1 başarısız
+            }
+
+            try
+            {
+                // Yöntem 2: Mevcut recognizer'ları kontrol et
+                var recognizers = SpeechRecognitionEngine.InstalledRecognizers();
+                if (recognizers.Count > 0)
+                {
+                    speechRecognizer = new SpeechRecognitionEngine(recognizers[0]);
+                    ConfigureSpeechRecognizer();
+                    lblStatus.Text = "✅ Mikrofon hazır - KONUŞMAYA BAŞLA butonuna basın";
+                    lblStatus.ForeColor = Color.Lime;
+                    return;
+                }
+            }
+            catch
+            {
+                // Yöntem 2 başarısız
+            }
+
+            try
+            {
+                // Yöntem 3: En-US recognizer ile dene
+                speechRecognizer = new SpeechRecognitionEngine(new System.Globalization.CultureInfo("en-US"));
+                ConfigureSpeechRecognizer();
+                lblStatus.Text = "✅ Mikrofon hazır (İngilizce) - KONUŞMAYA BAŞLA butonuna basın";
+                lblStatus.ForeColor = Color.Lime;
+                return;
+            }
+            catch
+            {
+                // Yöntem 3 başarısız
+            }
+
+            // Tüm yöntemler başarısız
+            lblStatus.Text = "❌ Mikrofon servisi bulunamadı - Manuel giriş kullanın";
+            lblStatus.ForeColor = Color.Orange;
+        }
+
+        /// <summary>
+        /// Speech recognizer'ı yapılandırır
+        /// </summary>
+        private void ConfigureSpeechRecognizer()
+        {
+            if (speechRecognizer == null) return;
+
+            try
+            {
+                // Basit gramer oluştur - Herhangi bir kelimeyi kabul et
+                var grammarBuilder = new GrammarBuilder();
+                grammarBuilder.AppendWildcard();
+                
+                // Grameri yükle
+                speechRecognizer.LoadGrammar(new Grammar(grammarBuilder));
+
+                // Konuşma tanıma olaylarını bağla
+                speechRecognizer.SpeechRecognized += SpeechRecognizer_SpeechRecognized;
+                speechRecognizer.SpeechDetected += SpeechRecognizer_SpeechDetected;
+                speechRecognizer.SpeechHypothesized += SpeechRecognizer_SpeechHypothesized;
+                speechRecognizer.SpeechRecognitionRejected += SpeechRecognizer_SpeechRecognitionRejected;
+            }
+            catch
+            {
+                // Gramer yükleme hatası - sessizce devam et
             }
         }
 
@@ -196,7 +250,7 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Tek tuş kayıt butonu olayı - Başlat/Durdur aynı tuş
+        /// Tek tuş kayıt butonu olayı - Mikrofon sorunu çözümü ile
         /// </summary>
         private void btnRecord_Click(object sender, EventArgs e)
         {
@@ -204,8 +258,20 @@ namespace SpeechToTextTranslator
             {
                 if (speechRecognizer == null)
                 {
-                    MessageBox.Show("❌ Mikrofon servisi mevcut değil.\n\nLütfen metni manuel olarak girin.", "Mikrofon Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    // Mikrofon servisini tekrar dene
+                    InitializeMicrophoneService();
+                    
+                    if (speechRecognizer == null)
+                    {
+                        MessageBox.Show("❌ Mikrofon servisi mevcut değil.\\n\\n" +
+                                      "🔧 Çözüm önerileri:\\n" +
+                                      "1. Windows Mikrofon izinlerini kontrol edin\\n" +
+                                      "2. Mikrofonunuzun çalıştığından emin olun\\n" +
+                                      "3. Manuel metin girişi kullanın\\n" +
+                                      "4. Uygulamayı yönetici olarak çalıştırın", 
+                                      "Mikrofon Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                 }
 
                 if (!isRecording)
@@ -235,7 +301,12 @@ namespace SpeechToTextTranslator
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"❌ Kayıt hatası: {ex.Message}\n\nManuel metin girişi kullanabilirsiniz.", "Kayıt Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"❌ Kayıt hatası: {ex.Message}\\n\\n" +
+                              "🔧 Çözüm önerileri:\\n" +
+                              "1. Mikrofon izinlerini kontrol edin\\n" +
+                              "2. Uygulamayı yönetici olarak çalıştırın\\n" +
+                              "3. Manuel metin girişi kullanın", 
+                              "Kayıt Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 lblStatus.Text = "❌ Manuel giriş kullanın";
                 lblStatus.ForeColor = Color.Orange;
                 
