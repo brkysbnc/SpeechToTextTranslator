@@ -45,14 +45,12 @@ namespace SpeechToTextTranslator
                 // Konuşma tanıma motorunu başlat
                 speechRecognizer = new SpeechRecognitionEngine();
                 
-                // Türkçe ve İngilizce dil desteği ekle
-                var turkishGrammar = new GrammarBuilder();
-                turkishGrammar.Culture = new System.Globalization.CultureInfo("tr-TR");
-                speechRecognizer.LoadGrammar(new Grammar(turkishGrammar));
-
-                var englishGrammar = new GrammarBuilder();
-                englishGrammar.Culture = new System.Globalization.CultureInfo("en-US");
-                speechRecognizer.LoadGrammar(new Grammar(englishGrammar));
+                // Basit dil tanıma grameri oluştur (boş gramer hatası için düzeltme)
+                var grammarBuilder = new GrammarBuilder();
+                grammarBuilder.AppendWildcard(); // Herhangi bir kelimeyi kabul et
+                
+                // Grameri yükle
+                speechRecognizer.LoadGrammar(new Grammar(grammarBuilder));
 
                 // Konuşma tanıma olaylarını bağla
                 speechRecognizer.SpeechRecognized += SpeechRecognizer_SpeechRecognized;
