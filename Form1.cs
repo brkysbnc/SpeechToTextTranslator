@@ -11,6 +11,7 @@ using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Net.Http;
 using Newtonsoft.Json;
+using Google.Cloud.Translation.V2;
 
 namespace SpeechToTextTranslator
 {
@@ -265,26 +266,41 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Metin çeviri fonksiyonu - Basit sözlük tabanlı çeviri
+        /// Metin çeviri fonksiyonu - Google Translate API kullanarak gerçek çeviri
         /// </summary>
         private async Task<string> TranslateText(string text, string sourceLang, string targetLang)
         {
-            // Gerçek uygulamada burada Google Translate API kullanılmalı
-            // Şimdilik basit bir sözlük çevirisi yapıyoruz
-            
-            await Task.Delay(500); // API çağrısını simüle et
-
-            if (sourceLang == "Türkçe" && targetLang == "İngilizce")
+            try
             {
-                return TranslateTurkishToEnglish(text);
+                // Google Translate API ile gerçek çeviri
+                TranslationClient client = TranslationClient.Create();
+                
+                // Dil kodlarını belirle
+                string sourceCode = sourceLang == "Türkçe" ? "tr" : "en";
+                string targetCode = targetLang == "İngilizce" ? "en" : "tr";
+                
+                // Çeviri yap
+                var result = await client.TranslateTextAsync(text, targetCode, sourceCode);
+                
+                return result.TranslatedText;
             }
-            else if (sourceLang == "İngilizce" && targetLang == "Türkçe")
+            catch (Exception ex)
             {
-                return TranslateEnglishToTurkish(text);
-            }
-            else
-            {
-                return text; // Aynı dil seçilmişse metni olduğu gibi döndür
+                // API hatası durumunda basit sözlük çevirisi kullan
+                MessageBox.Show($"Google Translate API hatası: {ex.Message}\n\nBasit çeviri kullanılıyor.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                
+                if (sourceLang == "Türkçe" && targetLang == "İngilizce")
+                {
+                    return TranslateTurkishToEnglish(text);
+                }
+                else if (sourceLang == "İngilizce" && targetLang == "Türkçe")
+                {
+                    return TranslateEnglishToTurkish(text);
+                }
+                else
+                {
+                    return text;
+                }
             }
         }
 
