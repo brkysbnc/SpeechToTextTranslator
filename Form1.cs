@@ -42,10 +42,22 @@ namespace SpeechToTextTranslator
         {
             try
             {
-                // Konuşma tanıma motorunu başlat
+                // Konuşma tanıma motorunu başlat - varsayılan sistem recognizer'ını kullan
                 speechRecognizer = new SpeechRecognitionEngine();
                 
-                // Basit dil tanıma grameri oluştur (boş gramer hatası için düzeltme)
+                // Sistemdeki mevcut recognizer'ları kontrol et
+                var recognizers = SpeechRecognitionEngine.InstalledRecognizers();
+                if (recognizers.Count == 0)
+                {
+                    lblStatus.Text = "Konuşma tanıma servisi bulunamadı - Manuel giriş kullanın";
+                    lblStatus.ForeColor = Color.Orange;
+                    return;
+                }
+
+                // İlk mevcut recognizer'ı kullan
+                speechRecognizer = new SpeechRecognitionEngine(recognizers[0]);
+                
+                // Basit dil tanıma grameri oluştur
                 var grammarBuilder = new GrammarBuilder();
                 grammarBuilder.AppendWildcard(); // Herhangi bir kelimeyi kabul et
                 
@@ -61,14 +73,24 @@ namespace SpeechToTextTranslator
                 speechSynthesizer = new SpeechSynthesizer();
                 speechSynthesizer.SetOutputToDefaultAudioDevice();
 
-                lblStatus.Text = "Konuşma bileşenleri hazır";
+                lblStatus.Text = "Konuşma bileşenleri hazır - Mikrofon izni verin";
                 lblStatus.ForeColor = Color.Green;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Konuşma bileşenleri başlatılamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Konuşma bileşenleri başlatılamadı";
-                lblStatus.ForeColor = Color.Red;
+                lblStatus.Text = "Konuşma servisi yok - Manuel giriş kullanın";
+                lblStatus.ForeColor = Color.Orange;
+                
+                // Konuşma sentez motorunu başlat (bu genelde çalışır)
+                try
+                {
+                    speechSynthesizer = new SpeechSynthesizer();
+                    speechSynthesizer.SetOutputToDefaultAudioDevice();
+                }
+                catch
+                {
+                    // Seslendirme de çalışmazsa sessizce devam et
+                }
             }
         }
 
@@ -157,6 +179,12 @@ namespace SpeechToTextTranslator
         {
             try
             {
+                if (speechRecognizer == null)
+                {
+                    MessageBox.Show("Konuşma tanıma servisi mevcut değil. Lütfen metni manuel olarak girin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
                 if (!isRecording)
                 {
                     speechRecognizer.RecognizeAsync(RecognizeMode.Multiple);
@@ -171,7 +199,9 @@ namespace SpeechToTextTranslator
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Kayıt başlatılamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Kayıt başlatılamadı: {ex.Message}\n\nManuel metin girişi kullanabilirsiniz.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                lblStatus.Text = "Manuel giriş kullanın";
+                lblStatus.ForeColor = Color.Orange;
             }
         }
 
