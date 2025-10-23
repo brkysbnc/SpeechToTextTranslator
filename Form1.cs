@@ -36,20 +36,21 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Konuşma tanıma ve sentez bileşenlerini başlatır
+        /// Konuşma tanıma ve sentez bileşenlerini başlatır - Geliştirilmiş versiyon
         /// </summary>
         private void InitializeSpeechComponents()
         {
             try
             {
-                // Konuşma tanıma motorunu başlat - varsayılan sistem recognizer'ını kullan
-                speechRecognizer = new SpeechRecognitionEngine();
+                // Konuşma sentez motorunu önce başlat (daha güvenilir)
+                speechSynthesizer = new SpeechSynthesizer();
+                speechSynthesizer.SetOutputToDefaultAudioDevice();
                 
                 // Sistemdeki mevcut recognizer'ları kontrol et
                 var recognizers = SpeechRecognitionEngine.InstalledRecognizers();
                 if (recognizers.Count == 0)
                 {
-                    lblStatus.Text = "Konuşma tanıma servisi bulunamadı - Manuel giriş kullanın";
+                    lblStatus.Text = "❌ Mikrofon servisi bulunamadı - Manuel giriş kullanın";
                     lblStatus.ForeColor = Color.Orange;
                     return;
                 }
@@ -57,9 +58,14 @@ namespace SpeechToTextTranslator
                 // İlk mevcut recognizer'ı kullan
                 speechRecognizer = new SpeechRecognitionEngine(recognizers[0]);
                 
-                // Basit dil tanıma grameri oluştur
+                // Daha kapsamlı dil tanıma grameri oluştur
                 var grammarBuilder = new GrammarBuilder();
-                grammarBuilder.AppendWildcard(); // Herhangi bir kelimeyi kabul et
+                
+                // Türkçe ve İngilizce kelimeler için özel gramer
+                var turkishWords = new Choices("merhaba", "selam", "nasılsın", "iyiyim", "teşekkürler", "lütfen", "evet", "hayır", "güzel", "iyi", "kötü", "büyük", "küçük", "hızlı", "yavaş", "sıcak", "soğuk", "su", "yemek", "ev", "araba", "kitap", "okul", "çalışma", "aile", "arkadaş", "zaman", "para", "ülke", "şehir", "proje", "çok", "beautiful", "hello", "hi", "how", "are", "you", "fine", "thank", "please", "yes", "no", "good", "bad", "big", "small", "fast", "slow", "hot", "cold", "water", "food", "house", "car", "book", "school", "work", "family", "friend", "time", "money", "country", "city", "very", "project");
+                
+                grammarBuilder.Append(turkishWords);
+                grammarBuilder.AppendWildcard(); // Diğer kelimeler için
                 
                 // Grameri yükle
                 speechRecognizer.LoadGrammar(new Grammar(grammarBuilder));
@@ -68,17 +74,14 @@ namespace SpeechToTextTranslator
                 speechRecognizer.SpeechRecognized += SpeechRecognizer_SpeechRecognized;
                 speechRecognizer.SpeechDetected += SpeechRecognizer_SpeechDetected;
                 speechRecognizer.SpeechHypothesized += SpeechRecognizer_SpeechHypothesized;
+                speechRecognizer.SpeechRecognitionRejected += SpeechRecognizer_SpeechRecognitionRejected;
 
-                // Konuşma sentez motorunu başlat
-                speechSynthesizer = new SpeechSynthesizer();
-                speechSynthesizer.SetOutputToDefaultAudioDevice();
-
-                lblStatus.Text = "Konuşma bileşenleri hazır - Mikrofon izni verin";
-                lblStatus.ForeColor = Color.Green;
+                lblStatus.Text = "✅ Mikrofon hazır - KONUŞMAYA BAŞLA butonuna basın";
+                lblStatus.ForeColor = Color.Lime;
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "Konuşma servisi yok - Manuel giriş kullanın";
+                lblStatus.Text = "❌ Mikrofon servisi yok - Manuel giriş kullanın";
                 lblStatus.ForeColor = Color.Orange;
                 
                 // Konuşma sentez motorunu başlat (bu genelde çalışır)
@@ -135,11 +138,16 @@ namespace SpeechToTextTranslator
             }
 
             txtSourceText.Text = e.Result.Text;
-            lblStatus.Text = "Konuşma tanındı - Çeviri için hazır";
-            lblStatus.ForeColor = Color.Blue;
+            lblStatus.Text = "✅ Konuşma tanındı - Otomatik çeviri yapılıyor...";
+            lblStatus.ForeColor = Color.Lime;
             
             // Otomatik çeviri
             btnTranslate_Click(null, null);
+            
+            // Kayıt durdur
+            isRecording = false;
+            btnRecord.Text = "🎤 KONUŞMAYA BAŞLA";
+            btnRecord.BackColor = Color.FromArgb(0, 120, 215);
         }
 
         /// <summary>
@@ -153,8 +161,8 @@ namespace SpeechToTextTranslator
                 return;
             }
 
-            lblStatus.Text = "Konuşma algılandı - Dinleniyor...";
-            lblStatus.ForeColor = Color.Orange;
+            lblStatus.Text = "🎤 Konuşma algılandı - Dinleniyor...";
+            lblStatus.ForeColor = Color.Yellow;
         }
 
         /// <summary>
@@ -168,98 +176,107 @@ namespace SpeechToTextTranslator
                 return;
             }
 
-            lblStatus.Text = $"Dinleniyor: {e.Result.Text}...";
+            lblStatus.Text = $"🎤 Dinleniyor: {e.Result.Text}...";
+            lblStatus.ForeColor = Color.Yellow;
+        }
+
+        /// <summary>
+        /// Konuşma tanıma reddedildi olayı
+        /// </summary>
+        private void SpeechRecognizer_SpeechRecognitionRejected(object sender, SpeechRecognitionRejectedEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => SpeechRecognizer_SpeechRecognitionRejected(sender, e)));
+                return;
+            }
+
+            lblStatus.Text = "❌ Konuşma anlaşılamadı - Tekrar deneyin";
             lblStatus.ForeColor = Color.Orange;
         }
 
         /// <summary>
-        /// Kayıt başlatma butonu olayı
+        /// Tek tuş kayıt butonu olayı - Başlat/Durdur aynı tuş
         /// </summary>
-        private void btnStartRecording_Click(object sender, EventArgs e)
+        private void btnRecord_Click(object sender, EventArgs e)
         {
             try
             {
                 if (speechRecognizer == null)
                 {
-                    MessageBox.Show("Konuşma tanıma servisi mevcut değil. Lütfen metni manuel olarak girin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("❌ Mikrofon servisi mevcut değil.\n\nLütfen metni manuel olarak girin.", "Mikrofon Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 if (!isRecording)
                 {
-                    speechRecognizer.RecognizeAsync(RecognizeMode.Multiple);
+                    // Kayıt başlat
+                    speechRecognizer.RecognizeAsync(RecognizeMode.Single);
                     isRecording = true;
                     
-                    btnStartRecording.Enabled = false;
-                    btnStopRecording.Enabled = true;
+                    btnRecord.Text = "⏹️ KAYDI DURDUR";
+                    btnRecord.BackColor = Color.FromArgb(220, 53, 69);
                     
-                    lblStatus.Text = "Kayıt başladı - Konuşun...";
+                    lblStatus.Text = "🎤 Kayıt başladı - Konuşun...";
                     lblStatus.ForeColor = Color.Red;
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Kayıt başlatılamadı: {ex.Message}\n\nManuel metin girişi kullanabilirsiniz.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Manuel giriş kullanın";
-                lblStatus.ForeColor = Color.Orange;
-            }
-        }
-
-        /// <summary>
-        /// Kayıt durdurma butonu olayı
-        /// </summary>
-        private void btnStopRecording_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (isRecording)
+                else
                 {
+                    // Kayıt durdur
                     speechRecognizer.RecognizeAsyncStop();
                     isRecording = false;
                     
-                    btnStartRecording.Enabled = true;
-                    btnStopRecording.Enabled = false;
+                    btnRecord.Text = "🎤 KONUŞMAYA BAŞLA";
+                    btnRecord.BackColor = Color.FromArgb(0, 120, 215);
                     
-                    lblStatus.Text = "Kayıt durduruldu";
+                    lblStatus.Text = "⏹️ Kayıt durduruldu";
                     lblStatus.ForeColor = Color.Blue;
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Kayıt durdurulamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"❌ Kayıt hatası: {ex.Message}\n\nManuel metin girişi kullanabilirsiniz.", "Kayıt Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "❌ Manuel giriş kullanın";
+                lblStatus.ForeColor = Color.Orange;
+                
+                // Buton durumunu sıfırla
+                isRecording = false;
+                btnRecord.Text = "🎤 KONUŞMAYA BAŞLA";
+                btnRecord.BackColor = Color.FromArgb(0, 120, 215);
             }
         }
 
+
         /// <summary>
-        /// Çeviri butonu olayı - Google Translate benzeri çeviri yapar
+        /// Çeviri butonu olayı - MyMemory API ile ücretsiz çeviri
         /// </summary>
         private async void btnTranslate_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtSourceText.Text))
             {
-                MessageBox.Show("Çevrilecek metin girin!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("❌ Çevrilecek metin girin!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                lblStatus.Text = "Çeviri yapılıyor...";
-                lblStatus.ForeColor = Color.Orange;
+                lblStatus.Text = "🔄 Çeviri yapılıyor...";
+                lblStatus.ForeColor = Color.Yellow;
 
-                string sourceLang = cmbSourceLanguage.SelectedItem.ToString();
-                string targetLang = cmbTargetLanguage.SelectedItem.ToString();
+                string sourceLang = cmbSourceLanguage.SelectedItem?.ToString() ?? "Türkçe";
+                string targetLang = cmbTargetLanguage.SelectedItem?.ToString() ?? "İngilizce";
 
-                // Basit çeviri sözlüğü (gerçek uygulamada Google Translate API kullanılmalı)
+                // MyMemory API ile çeviri
                 string translatedText = await TranslateText(txtSourceText.Text, sourceLang, targetLang);
                 
                 txtTranslatedText.Text = translatedText;
-                lblStatus.Text = "Çeviri tamamlandı";
-                lblStatus.ForeColor = Color.Green;
+                lblStatus.Text = "✅ Çeviri tamamlandı";
+                lblStatus.ForeColor = Color.Lime;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Çeviri hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Çeviri hatası";
+                MessageBox.Show($"❌ Çeviri hatası: {ex.Message}", "Çeviri Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "❌ Çeviri hatası";
                 lblStatus.ForeColor = Color.Red;
             }
         }
@@ -429,37 +446,57 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Seslendirme butonu olayı - Çevrilen metni seslendirir
+        /// Seslendirme butonu olayı - Çevrilen metni seslendirir (Geliştirilmiş versiyon)
         /// </summary>
         private void btnSpeak_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtTranslatedText.Text))
             {
-                MessageBox.Show("Seslendirilecek metin yok!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("❌ Seslendirilecek metin yok!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                // Hedef dile göre ses ayarla
-                string targetLang = cmbTargetLanguage.SelectedItem.ToString();
-                
-                if (targetLang == "Türkçe")
+                // SpeechSynthesizer null kontrolü
+                if (speechSynthesizer == null)
                 {
-                    speechSynthesizer.SelectVoiceByHints(VoiceGender.Female, VoiceAge.Adult, 0, new System.Globalization.CultureInfo("tr-TR"));
-                }
-                else
-                {
-                    speechSynthesizer.SelectVoiceByHints(VoiceGender.Female, VoiceAge.Adult, 0, new System.Globalization.CultureInfo("en-US"));
+                    MessageBox.Show("❌ Seslendirme servisi mevcut değil.\n\nSistem ses ayarlarınızı kontrol edin.", "Seslendirme Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
 
+                // Hedef dile göre ses ayarla
+                string targetLang = cmbTargetLanguage.SelectedItem?.ToString() ?? "İngilizce";
+                
+                try
+                {
+                    if (targetLang == "Türkçe")
+                    {
+                        speechSynthesizer.SelectVoiceByHints(VoiceGender.Female, VoiceAge.Adult, 0, new System.Globalization.CultureInfo("tr-TR"));
+                    }
+                    else
+                    {
+                        speechSynthesizer.SelectVoiceByHints(VoiceGender.Female, VoiceAge.Adult, 0, new System.Globalization.CultureInfo("en-US"));
+                    }
+                }
+                catch
+                {
+                    // Ses ayarlama hatası - varsayılan sesle devam et
+                }
+
+                // Seslendirme hızını ayarla
+                speechSynthesizer.Rate = 0; // Normal hız
+                speechSynthesizer.Volume = 100; // Maksimum ses
+
                 speechSynthesizer.SpeakAsync(txtTranslatedText.Text);
-                lblStatus.Text = "Metin seslendiriliyor...";
+                lblStatus.Text = "🔊 Metin seslendiriliyor...";
                 lblStatus.ForeColor = Color.Purple;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Seslendirme hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"❌ Seslendirme hatası: {ex.Message}\n\nSistem ses ayarlarınızı kontrol edin.", "Seslendirme Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "❌ Seslendirme hatası";
+                lblStatus.ForeColor = Color.Red;
             }
         }
 
