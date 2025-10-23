@@ -11,7 +11,6 @@ using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Net.Http;
 using Newtonsoft.Json;
-using Google.Cloud.Translation.V2;
 
 namespace SpeechToTextTranslator
 {
@@ -266,41 +265,72 @@ namespace SpeechToTextTranslator
         }
 
         /// <summary>
-        /// Metin çeviri fonksiyonu - Google Translate API kullanarak gerçek çeviri
+        /// Metin çeviri fonksiyonu - MyMemory API ile ücretsiz çeviri
         /// </summary>
         private async Task<string> TranslateText(string text, string sourceLang, string targetLang)
         {
             try
             {
-                // Google Translate API ile gerçek çeviri
-                TranslationClient client = TranslationClient.Create();
-                
                 // Dil kodlarını belirle
                 string sourceCode = sourceLang == "Türkçe" ? "tr" : "en";
                 string targetCode = targetLang == "İngilizce" ? "en" : "tr";
                 
-                // Çeviri yap
-                var result = await client.TranslateTextAsync(text, targetCode, sourceCode);
+                // MyMemory API URL'i
+                string apiUrl = $"https://api.mymemory.translated.net/get?q={Uri.EscapeDataString(text)}&langpair={sourceCode}|{targetCode}";
                 
-                return result.TranslatedText;
+                // HTTP isteği gönder
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    var response = await client.GetStringAsync(apiUrl);
+                    
+                    // JSON yanıtını parse et
+                    var jsonResponse = JsonConvert.DeserializeObject<dynamic>(response);
+                    
+                    if (jsonResponse.responseStatus == 200)
+                    {
+                        string translatedText = jsonResponse.responseData.translatedText;
+                        
+                        // Çeviri kalitesi kontrolü
+                        if (jsonResponse.responseData.match != null && jsonResponse.responseData.match > 0.5)
+                        {
+                            return translatedText;
+                        }
+                        else
+                        {
+                            // Düşük kaliteli çeviri - basit sözlük kullan
+                            return GetSimpleTranslation(text, sourceLang, targetLang);
+                        }
+                    }
+                    else
+                    {
+                        throw new Exception("API yanıt hatası");
+                    }
+                }
             }
             catch (Exception ex)
             {
                 // API hatası durumunda basit sözlük çevirisi kullan
-                MessageBox.Show($"Google Translate API hatası: {ex.Message}\n\nBasit çeviri kullanılıyor.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                
-                if (sourceLang == "Türkçe" && targetLang == "İngilizce")
-                {
-                    return TranslateTurkishToEnglish(text);
-                }
-                else if (sourceLang == "İngilizce" && targetLang == "Türkçe")
-                {
-                    return TranslateEnglishToTurkish(text);
-                }
-                else
-                {
-                    return text;
-                }
+                return GetSimpleTranslation(text, sourceLang, targetLang);
+            }
+        }
+
+        /// <summary>
+        /// Basit sözlük çevirisi (fallback)
+        /// </summary>
+        private string GetSimpleTranslation(string text, string sourceLang, string targetLang)
+        {
+            if (sourceLang == "Türkçe" && targetLang == "İngilizce")
+            {
+                return TranslateTurkishToEnglish(text);
+            }
+            else if (sourceLang == "İngilizce" && targetLang == "Türkçe")
+            {
+                return TranslateEnglishToTurkish(text);
+            }
+            else
+            {
+                return text;
             }
         }
 
